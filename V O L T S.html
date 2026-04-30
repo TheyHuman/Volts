@@ -1,0 +1,1363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>V O L T S</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+    :root{
+      --bg0:#05060a;
+      --bg1:#000000;
+      --volt:#ffe800;
+      --volt2:#fff7a8;
+      --dim:#1a1600;
+      --danger:#ff2b2b;
+    }
+
+    @keyframes voltsPulse {
+      0% { filter: brightness(1); opacity: 0.85; }
+      50% { filter: brightness(1.5); opacity: 1; }
+      100% { filter: brightness(1); opacity: 0.85; }
+    }
+
+    @keyframes voltsFlicker {
+      0% { opacity: 0.55; }
+      20% { opacity: 1; }
+      40% { opacity: 0.75; }
+      60% { opacity: 1; }
+      80% { opacity: 0.65; }
+      100% { opacity: 0.95; }
+    }
+
+    html,body{
+      margin:0;
+      padding:0;
+      height:100%;
+      background:#000;
+      overflow:hidden;
+      font-family: "Press Start 2P", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      user-select:none;
+      touch-action:manipulation;
+    }
+
+    body{
+      background: linear-gradient(180deg, #05060a 0%, #020205 40%, #000 100%);
+    }
+
+    canvas{
+      display:block;
+      width:100vw;
+      height:100vh;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+
+    #hud{
+      position:fixed;
+      top:10px;
+      left:10px;
+      z-index:10;
+      color:var(--volt);
+      font-size:10px;
+      letter-spacing:0.5px;
+      text-shadow: 0 0 8px rgba(255,232,0,0.8), 0 0 18px rgba(255,232,0,0.4);
+      background: rgba(0,0,0,0.25);
+      border:1px solid rgba(255,232,0,0.25);
+      padding:8px 10px;
+      border-radius:0px;
+      backdrop-filter: blur(4px);
+    }
+
+    .screen{
+      position:fixed;
+      inset:0;
+      z-index:20;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background: linear-gradient(180deg, rgba(255,232,0,0.08) 0%, rgba(0,0,0,0.94) 55%, #000 100%);
+      color:var(--volt);
+      text-align:center;
+      padding:24px;
+    }
+    .card{
+      width:min(880px, 92vw);
+      border:1px solid rgba(255,232,0,0.28);
+      background: linear-gradient(180deg, rgba(30,22,0,0.32), rgba(0,0,0,0.78));
+      box-shadow: 0 0 30px rgba(255,232,0,0.22);
+      border-radius:0px;
+      padding:18px 18px 16px;
+      outline: 2px solid rgba(255,232,0,0.10);
+      outline-offset: 3px;
+    }
+    .title{
+      font-size:34px;
+      letter-spacing:8px;
+      margin:8px 0 12px;
+      text-shadow: 0 0 10px rgba(255,232,0,0.8), 0 0 32px rgba(255,232,0,0.35);
+    }
+    .sub{
+      color: rgba(255,247,168,0.95);
+      font-size:10px;
+      line-height:1.65;
+      margin: 0 0 14px;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+      margin: 14px 0 14px;
+      text-align:left;
+      font-size:10px;
+    }
+    .pill{
+      border:1px solid rgba(255,232,0,0.22);
+      background: rgba(0,0,0,0.35);
+      border-radius:0px;
+      padding:10px 12px;
+      box-shadow: inset 0 0 20px rgba(255,232,0,0.06);
+    }
+    .pill b{ color:var(--volt2); }
+
+    .row{
+      display:flex;
+      gap:10px;
+      justify-content:center;
+      flex-wrap:wrap;
+      margin-top:12px;
+    }
+
+    button{
+      appearance:none;
+      border:1px solid rgba(255,232,0,0.35);
+      background: linear-gradient(180deg, rgba(255,232,0,0.18), rgba(0,0,0,0.55));
+      color: var(--volt);
+      padding: 12px 12px;
+      border-radius: 0px;
+      font-weight:700;
+      letter-spacing:1px;
+      font-size:10px;
+      cursor:pointer;
+      text-shadow: none;
+      box-shadow:
+        0 0 0 2px rgba(255,232,0,0.10),
+        0 0 20px rgba(255,232,0,0.16);
+      transition: transform 0.08s ease, box-shadow 0.12s ease, background 0.12s ease;
+    }
+    button:hover{
+      transform: translateY(-1px);
+      box-shadow:
+        0 0 0 2px rgba(255,232,0,0.14),
+        0 0 28px rgba(255,232,0,0.22);
+      background: linear-gradient(180deg, rgba(255,232,0,0.24), rgba(0,0,0,0.55));
+    }
+    button:active{ transform: translateY(0px) scale(0.99); }
+  </style>
+</head>
+<body>
+  <div id="hud"></div>
+  <div id="start" class="screen">
+    <div class="card">
+      <div class="title">V O L T S</div>
+      <div class="sub">
+        2‑player neon‑yellow infinite runner. Tight platforming, double jumps, speed pads, jump pads, spikes.
+        Survive together as the world accelerates.
+      </div>
+      <div class="grid">
+        <div class="pill"><b>P1</b>: Jump = <b>W</b> (double jump enabled). Drop = <b>S</b>.</div>
+        <div class="pill"><b>P2</b>: Jump = <b>↑</b> (double jump enabled). Drop = <b>↓</b>.</div>
+        <div class="pill"><b>Speed Pad</b>: short burst, harder landings.</div>
+        <div class="pill"><b>Jump Pad</b>: launches you high; chain into double jump.</div>
+      </div>
+      <div class="sub">Tip: you can “drop” through thin platforms by holding drop and jumping.</div>
+      <div class="row">
+        <button id="btnStart">START</button>
+        <button id="btnPractice" title="Slower ramp for warmup">PRACTICE</button>
+      </div>
+    </div>
+  </div>
+  <div id="over" class="screen" style="display:none">
+    <div class="card">
+      <div class="title" style="font-size:36px;letter-spacing:8px;margin-bottom:8px;">SYSTEM FAILURE</div>
+      <div id="overText" class="sub"></div>
+      <div class="row">
+        <button id="btnRestart">RESTART</button>
+      </div>
+    </div>
+  </div>
+  <canvas id="c"></canvas>
+
+  <script>
+  (() => {
+    // --- Pixel SNES-ish renderer (low-res internal, scaled to screen) ---
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d', { alpha: false });
+
+    const W0 = 384;   // internal resolution (wide enough for 2 players + look)
+    const H0 = 216;
+    canvas.width = W0;
+    canvas.height = H0;
+
+    const hud = document.getElementById('hud');
+    const startScreen = document.getElementById('start');
+    const overScreen = document.getElementById('over');
+    const overText = document.getElementById('overText');
+    const btnStart = document.getElementById('btnStart');
+    const btnPractice = document.getElementById('btnPractice');
+    const btnRestart = document.getElementById('btnRestart');
+
+    const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+    const rand = (a,b) => a + Math.random()*(b-a);
+    const randi = (a,b) => (a + Math.floor(Math.random()*(b-a+1)));
+
+    // --- Input ---
+    const keys = new Map();
+    addEventListener('keydown', (e) => {
+      keys.set(e.code, true);
+      if(['ArrowUp','ArrowDown','Space'].includes(e.code)) e.preventDefault();
+      // Secret debug combo: A + 8
+      if(keys.get('KeyA') && keys.get('Digit8')){
+        toggleDebug1P();
+      }
+    });
+    addEventListener('keyup', (e) => { keys.set(e.code, false); });
+
+    // Touch: left half = P1 jump, right half = P2 jump
+    canvas.addEventListener('pointerdown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width;
+      if(x < 0.5) touchJump1 = 6;
+      else touchJump2 = 6;
+    }, { passive: true });
+    let touchJump1 = 0, touchJump2 = 0;
+
+    // --- Visual palette (monochrome volt) ---
+    const PAL = {
+      bg0: '#05060a',
+      bg1: '#000000',
+      volt: '#ffe800',
+      volt2:'#fff7a8',
+      voltDim:'#2a2200',
+      voltDarker:'#120e00',
+      hazard:'#ff2b2b'
+    };
+
+    // --- Game tuning ---
+    const GRAV = 0.42;
+    const JUMP = 5.65;
+    const DJUMP = 5.2;
+    const MAX_FALL = 9.5;
+    const PLAYER_W = 12;
+    const PLAYER_H = 12;
+    const FLOOR = H0 - 26;
+    const CEIL = 10;
+
+    // Platforms:
+    // - thick = solid always
+    // - thin = can drop through if holding drop + jump
+    const PLATFORM_H = 6;
+    const PAD_H = 4;
+    const SPIKE_H = 8;
+
+    const TYPE = {
+      THICK: 'thick',
+      THIN: 'thin',
+      SPEED: 'speed',
+      JUMP: 'jump',
+      BURST: 'burst',
+      SPIKES: 'spikes'
+    };
+
+    // --- State ---
+    let mode = 'menu'; // 'menu' | 'play' | 'dying' | 'over'
+    let practice = false;
+    let debug1P = false;
+    let t = 0;
+    let distance = 0; // world progression / difficulty
+    let score = 0;    // points
+    let best = Number(localStorage.getItem('VOLTS_BEST') || 0);
+    let deathTimer = 0;
+    let pendingGameOverReason = '';
+
+    let world = {
+      speed: 1.85,
+      accel: 0.00085,
+      shake: 0,
+      flash: 0,
+      flashR: 0,
+      flashG: 0,
+      flashB: 0
+    };
+
+    function flash(r,g,b,amt){
+      world.flashR = r; world.flashG = g; world.flashB = b;
+      world.flash = Math.max(world.flash, amt);
+    }
+
+    function shake(amt){ world.shake = Math.max(world.shake, amt); }
+
+    function aabb(ax,ay,aw,ah, bx,by,bw,bh){
+      return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+    }
+
+    class Particle {
+      constructor(x,y,dx,dy,life,kind){
+        this.x=x;this.y=y;this.dx=dx;this.dy=dy;this.life=life;this.kind=kind;
+      }
+      update(){
+        this.x += this.dx;
+        this.y += this.dy;
+        this.dy += 0.05;
+        this.life -= 1;
+      }
+    }
+    let parts = [];
+    function burst(x,y,n,spread=1.5,spd=1.2,kind='volt'){
+      for(let i=0;i<n;i++){
+        const a = rand(-Math.PI, 0);
+        const s = rand(0.4, spd);
+        parts.push(new Particle(x,y, Math.cos(a)*s*spread + rand(-0.2,0.2), Math.sin(a)*s*spread, randi(14,26), kind));
+      }
+    }
+
+    class Player {
+      constructor(name, x, color){
+        this.name = name;
+        this.x = x;
+        this.y = 0;
+        this.vx = 0;
+        this.vy = 0;
+        this.w = PLAYER_W;
+        this.h = PLAYER_H;
+        this.jumps = 0;
+        this.maxJumps = 2;
+        this.onGround = false;
+        this.coyote = 0;
+        this.dead = false;
+        this.trail = [];
+        this.color = color;
+        this.speedBuff = 0;
+        this.padCD = 0;
+        this.drop = false;
+        this.djCharge = 1; // 0..1, double jump cooldown
+        this.invuln = 0; // frames
+        this.scoreMult = 0; // frames (2x)
+        this.djUnlimited = 0; // frames
+        this.burstFx = 0; // frames for outline intensity
+      }
+
+      jump(force){
+        // double jump + coyote time
+        const canGroundJump = this.onGround || this.coyote > 0;
+        if(canGroundJump){
+          this.vy = -force;
+          this.jumps = 1;
+          this.onGround = false;
+          this.coyote = 0;
+          burst(this.x + this.w/2, this.y + this.h, 14, 1.3, 1.2, 'volt');
+          flash(255,232,0, 0.25);
+          return true;
+        }
+        if(this.jumps === 1 && (this.djUnlimited > 0 || this.djCharge >= 1)){
+          this.vy = -DJUMP;
+          this.jumps = 2;
+          if(this.djUnlimited <= 0) this.djCharge = 0;
+          burst(this.x + this.w/2, this.y + this.h, 18, 1.4, 1.4, 'volt2');
+          flash(255,247,168, 0.25);
+          return true;
+        }
+        return false;
+      }
+
+      kill(reason){
+        if(this.dead) return;
+        if(this.invuln > 0) return;
+        this.dead = true;
+        burst(this.x + this.w/2, this.y + this.h/2, 36, 2.2, 2.8, 'hazard');
+        shake(2.2);
+        flash(255, 50, 50, 0.65);
+        beginDying(reason);
+      }
+
+      update(input){
+        if(this.dead) return;
+        this.trail.push({x:this.x, y:this.y});
+        if(this.trail.length > 12) this.trail.shift();
+
+        this.padCD = Math.max(0, this.padCD - 1);
+        this.speedBuff *= 0.94;
+        this.vx = this.speedBuff;
+        // recharge double jump while alive (slower in air)
+        if(this.djUnlimited <= 0){
+          this.djCharge = clamp(this.djCharge + (this.onGround ? 0.040 : 0.020), 0, 1);
+        } else {
+          this.djCharge = 1;
+        }
+        this.invuln = Math.max(0, this.invuln - 1);
+        this.scoreMult = Math.max(0, this.scoreMult - 1);
+        this.djUnlimited = Math.max(0, this.djUnlimited - 1);
+        this.burstFx = Math.max(0, this.burstFx - 1);
+
+        const prevX = this.x;
+        const prevY = this.y;
+        const prevVy = this.vy;
+
+        // gravity
+        this.vy = clamp(this.vy + GRAV, -20, MAX_FALL);
+        // resolve X then Y to prevent side phasing
+        this.x += this.vx;
+
+        // keep players roughly on screen (runner style)
+        this.x = clamp(this.x, 42, W0 - 42 - this.w);
+
+        // X collisions (solid sides)
+        for(const p of platforms){
+          if(p.kind === TYPE.SPIKES) continue;
+          if(aabb(this.x, this.y, this.w, this.h, p.x, p.y, p.w, p.h)){
+            if(this.vx > 0){
+              this.x = p.x - this.w;
+            } else if(this.vx < 0){
+              this.x = p.x + p.w;
+            } else {
+              // if already intersecting, push out based on where we came from
+              if(prevX + this.w <= p.x) this.x = p.x - this.w;
+              else if(prevX >= p.x + p.w) this.x = p.x + p.w;
+            }
+          }
+        }
+
+        // apply Y
+        this.y += this.vy;
+
+        // coyote
+        if(!this.onGround) this.coyote = Math.max(0, this.coyote - 1);
+
+        // touching ground is instant death
+        if(this.y + this.h >= FLOOR){
+          if(this.invuln <= 0) this.kill(`${this.name} touched the ground.`);
+          return;
+        }
+        this.onGround = false;
+
+        // ceiling death (tight challenge)
+        if(this.y <= CEIL){
+          if(this.invuln <= 0) this.kill(`${this.name} hit the ceiling.`);
+          return;
+        }
+
+        // collide platforms (solid, thin supports drop-through)
+        const wantsDropThrough = (this.drop || (input.drop && input.jumpPressed));
+        for(const p of platforms){
+          if(p.kind === TYPE.SPIKES) continue;
+          if(p.kind === TYPE.THIN && wantsDropThrough) continue;
+
+          if(!aabb(this.x, this.y, this.w, this.h, p.x, p.y, p.w, p.h)) continue;
+
+          if(this.vy > 0){
+            // landing on top
+            this.y = p.y - this.h;
+            this.vy = 0;
+            if(!this.onGround) burst(this.x + this.w/2, this.y + this.h, 6, 1.0, 0.8, 'voltDim');
+            this.onGround = true;
+            this.jumps = 0;
+            this.coyote = 7;
+          } else if(this.vy < 0){
+            // hitting underside (thin platforms are pass-through from below)
+            if(p.kind !== TYPE.THIN){
+              this.y = p.y + p.h;
+              this.vy = 0.15;
+            }
+          }
+        }
+
+        // pads
+        if(this.padCD === 0){
+          for(const pad of pads){
+            if(aabb(this.x, this.y, this.w, this.h, pad.x, pad.y, pad.w, pad.h)){
+              if(pad.kind === TYPE.SPEED){
+                this.speedBuff = Math.max(this.speedBuff, 2.2 + world.speed * 0.28);
+                this.padCD = 10;
+                shake(0.5);
+                flash(255,232,0,0.35);
+                burst(this.x + this.w/2, this.y + this.h/2, 14, 1.4, 1.5, 'volt');
+              } else if(pad.kind === TYPE.JUMP){
+                this.vy = -8.4;
+                this.onGround = false;
+                this.jumps = 1; // allow double jump after pad
+                this.padCD = 10;
+                shake(0.6);
+                flash(255,247,168,0.45);
+                burst(this.x + this.w/2, this.y + this.h, 20, 1.7, 1.8, 'volt2');
+              } else if(pad.kind === TYPE.BURST){
+                // Burst Pad: invulnerable 5s, unlimited DJ 5s, 2x score 2s
+                this.invuln = Math.max(this.invuln, 60 * 5);
+                this.djUnlimited = Math.max(this.djUnlimited, 60 * 5);
+                this.scoreMult = Math.max(this.scoreMult, 60 * 2);
+                this.burstFx = Math.max(this.burstFx, 60 * 5);
+                this.padCD = 12;
+                shake(1.1);
+                flash(255,255,255,0.55);
+                // baby-blue lightning burst
+                for(let i=0;i<34;i++){
+                  parts.push(new Particle(
+                    this.x + this.w/2,
+                    this.y + this.h/2,
+                    rand(-2.8,2.8),
+                    rand(-3.4,1.2),
+                    randi(18,34),
+                    'burst'
+                  ));
+                }
+              }
+              break;
+            }
+          }
+        }
+
+        // hazards: spikes (after pads so Burst Pad can save you same-frame)
+        for(const s of spikes){
+          if(aabb(this.x, this.y, this.w, this.h, s.x, s.y, s.w, s.h)){
+            if(this.invuln <= 0) this.kill(`${this.name} hit spikes.`);
+            return;
+          }
+        }
+
+        // falling off left edge (rare if you get launched)
+        if(this.x < 20){
+          this.kill(`${this.name} fell behind.`);
+        }
+      }
+
+      draw(){
+        if(this.dead) return; // cube disappears; explosion particles keep playing
+
+        // trail
+        for(let i=0;i<this.trail.length;i++){
+          const a = i / this.trail.length;
+          const tx = this.trail[i].x | 0;
+          const ty = this.trail[i].y | 0;
+          ctx.fillStyle = (this.name === 'P1')
+            ? `rgba(255,232,0,${a*0.22})`
+            : `rgba(255,247,168,${a*0.22})`;
+          // chunky square trail blocks
+          const size = 4;
+          const cx = (tx + (this.w>>1) - (size>>1)) | 0;
+          const cy = (ty + (this.h>>1) - (size>>1)) | 0;
+          ctx.fillRect(cx, cy, size, size);
+        }
+
+        // body
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 10;
+        ctx.fillStyle = '#000';
+        ctx.fillRect(this.x|0, this.y|0, this.w, this.h);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = this.color;
+        ctx.strokeRect((this.x|0)+0.5, (this.y|0)+0.5, this.w-1, this.h-1);
+        ctx.shadowBlur = 0;
+
+        // burst lightning outline
+        if(this.invuln > 0 || this.burstFx > 0){
+          const pulse = 0.55 + 0.45*Math.sin(t * 0.35);
+          const a = (0.25 + 0.55*pulse) * (0.55 + 0.45*Math.min(1, (this.burstFx / (60*5)) + 0.15));
+          const glow = this.djUnlimited > 0 ? '#9fe7ff' : '#ffffff';
+          ctx.save();
+          ctx.globalAlpha = a;
+          ctx.shadowColor = glow;
+          ctx.shadowBlur = 10 + 16*pulse;
+          ctx.strokeStyle = glow;
+          ctx.lineWidth = 2;
+          ctx.strokeRect((this.x|0)-1.5, (this.y|0)-1.5, this.w+3, this.h+3);
+          // little lightning ticks around edges
+          if((t % 2) === 0){
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = glow;
+            const x0 = (this.x|0), y0 = (this.y|0);
+            ctx.fillRect(x0-3, y0 + randi(0,this.h-2), 2, 2);
+            ctx.fillRect(x0+this.w+1, y0 + randi(0,this.h-2), 2, 2);
+            ctx.fillRect(x0 + randi(0,this.w-2), y0-3, 2, 2);
+            ctx.fillRect(x0 + randi(0,this.w-2), y0+this.h+1, 2, 2);
+          }
+          // star sparks orbiting while invulnerable
+          if((t % 3) === 0){
+            ctx.globalAlpha = 0.55 * a;
+            ctx.fillStyle = glow;
+            const cx = (this.x + this.w/2)|0;
+            const cy = (this.y + this.h/2)|0;
+            const ox = Math.sin(t*0.22) * (this.w + 4);
+            const oy = Math.cos(t*0.18) * (this.h + 4);
+            ctx.fillRect((cx + ox)|0, (cy + oy)|0, 2, 2);
+            ctx.fillRect((cx - ox)|0, (cy - oy)|0, 2, 2);
+            ctx.globalAlpha = a;
+          }
+          ctx.restore();
+        }
+      }
+    }
+
+    // World objects
+    let platforms = [];
+    let pads = [];
+    let spikes = [];
+    let sideBolts = [];
+    let nextPlatId = 1;
+    let genLastY = FLOOR - 42; // last "main path" platform y (for reachability)
+    let structureCD = 0;
+
+    function resetWorld(){
+      t = 0;
+      distance = 0;
+      score = 0;
+      parts = [];
+      platforms = [];
+      pads = [];
+      spikes = [];
+      sideBolts = [];
+      nextPlatId = 1;
+      genLastY = FLOOR - 42;
+      structureCD = 0;
+      world.speed = practice ? 1.55 : 1.85;
+      world.accel = practice ? 0.00055 : 0.00085;
+      world.shake = 0;
+      world.flash = 0;
+
+      // baseline starting run (ground is deadly, so start elevated)
+      const startY = FLOOR - 42;
+      const p0 = { id: nextPlatId++, x: 0, y: startY, w: 170, h: PLATFORM_H, kind: TYPE.THICK };
+      const p1a = { id: nextPlatId++, x: 182, y: startY - 18, w: 74, h: PLATFORM_H, kind: TYPE.THIN };
+      platforms.push(p0);
+      platforms.push(p1a);
+      genLastY = p1a.y;
+      pads.push({ x: 70, y: startY - PAD_H, w: 18, h: PAD_H, kind: TYPE.SPEED });
+      spikes.push({ x: 224, y: startY - SPIKE_H, w: 12, h: SPIKE_H, kind: TYPE.SPIKES, pid: p1a.id });
+
+      // generate ahead
+      while(maxX() < W0 + 260) genChunk();
+    }
+
+    function maxX(){
+      let m = 0;
+      for(const p of platforms) m = Math.max(m, p.x + p.w);
+      return m;
+    }
+
+    function addPlatform(x,y,w,kind){
+      const p = { id: nextPlatId++, x, y, w, h: PLATFORM_H, kind };
+      platforms.push(p);
+      return p;
+    }
+
+    function addSpikeOnPlatform(p, xOffset, w){
+      spikes.push({ x: p.x + xOffset, y: p.y - SPIKE_H, w, h: SPIKE_H, kind: TYPE.SPIKES, pid: p.id });
+    }
+
+    function addPadOnPlatform(p, xOffset, kind){
+      pads.push({ x: p.x + xOffset, y: p.y - PAD_H, w: 18, h: PAD_H, kind });
+    }
+
+    function spawnStructure(xStart, d){
+      // Returns endX, newMainY
+      const type = Math.random() < 0.5 ? 'tunnel' : 'parkour';
+      const baseY = clamp(genLastY + rand(-10, 10), 40, FLOOR - 18);
+
+      if(type === 'tunnel'){
+        // "Empty tunnel": floor path + low ceiling (no ground), with a clear interior corridor.
+        // Main path stays on the floor platforms.
+        const len = rand(140, 210);
+        const seg = 34;
+        const floorY = clamp(baseY, 52, FLOOR - 16);
+        const ceilY = clamp(floorY - rand(34, 50), 18, floorY - 28);
+
+        for(let x = xStart; x < xStart + len; x += seg){
+          const w = seg + rand(-4, 6);
+          const pf = addPlatform(x, floorY, w, TYPE.THICK);
+          // ceiling pieces (thin so you can pass underneath, but still solid on sides)
+          addPlatform(x + rand(-2,2), ceilY, w - rand(0,6), TYPE.THIN);
+          // occasional spike on ceiling to keep it spicy (still avoid impossible)
+          if(Math.random() < 0.18 + d*0.18){
+            addSpikeOnPlatform(pf, rand(8, Math.max(9, pf.w - 22)), rand(10, 14));
+          }
+        }
+        // sometimes a speed pad at entrance
+        if(Math.random() < 0.35){
+          const entrance = platforms.find(p => p.x >= xStart && p.y === floorY);
+          if(entrance) addPadOnPlatform(entrance, 10, TYPE.SPEED);
+        }
+
+        return { endX: xStart + len, newMainY: floorY };
+      }
+
+      // "Pure parkour section": 5-8 small platforms, alternating heights, tight gaps.
+      const steps = randi(5, 8);
+      let x = xStart;
+      let y = clamp(baseY, 44, FLOOR - 20);
+      for(let i=0;i<steps;i++){
+        const w = rand(28, 54 - d*10);
+        const kind = (Math.random() < 0.65) ? TYPE.THIN : TYPE.THICK;
+        const p = addPlatform(x, y, w, kind);
+
+        // hazards sprinkled, but not every step
+        if(Math.random() < 0.28 + d*0.22){
+          addSpikeOnPlatform(p, rand(8, Math.max(9, p.w - 18)), rand(10, 14));
+        }
+        // occasional jump pad to chain
+        if(Math.random() < 0.18){
+          addPadOnPlatform(p, rand(6, Math.max(7, p.w - 24)), TYPE.JUMP);
+        }
+
+        // next step: reachable deltas
+        const rise = rand(-30, 18);
+        y = clamp(y + rise, 26, FLOOR - 18);
+        x += w + rand(18, 34 + d*10);
+      }
+
+      return { endX: x, newMainY: y };
+    }
+
+    function genChunk(){
+      const x0 = maxX();
+      const base = x0 + rand(18, 52);
+
+      // Difficulty ramps with distance
+      const d = clamp(distance / 1400, 0, 1);
+      structureCD = Math.max(0, structureCD - 1);
+
+      // occasional handcrafted structures (tunnel / parkour), with cooldown
+      if(structureCD === 0 && d > 0.08 && Math.random() < (0.055 + d*0.08)){
+        const xStart = base + rand(18, 44);
+        const out = spawnStructure(xStart, d);
+        genLastY = out.newMainY;
+        structureCD = randi(3, 6); // number of normal chunks before next structure
+        return;
+      }
+      const w = rand(50 - d*6, 120 - d*18);
+
+      // 3 height bands, gradually higher variance
+      const bands = [
+        FLOOR - 8,
+        FLOOR - 32,
+        FLOOR - 58,
+        FLOOR - 84
+      ];
+      const pick = bands[randi(0, 2 + (d>0.55 ? 1 : 0))];
+      let y = pick + rand(-6 - d*4, 6 + d*5);
+      // reachability clamps to prevent impossible high jumps
+      const MAX_RISE = 52;                 // max upward step (smaller = easier)
+      const MAX_DROP = 74;                 // max downward step
+      y = clamp(y, 36, FLOOR - 10);
+      y = Math.max(y, genLastY - MAX_RISE);
+      y = Math.min(y, genLastY + MAX_DROP);
+      y = clamp(y, 36, FLOOR - 10);
+
+      const thinChance = 0.38 + d*0.18;
+      const kind = (Math.random() < thinChance) ? TYPE.THIN : TYPE.THICK;
+
+      // gap depends on rise: higher platforms get smaller gaps
+      const rise = genLastY - y; // + means new platform is higher
+      const baseGapMin = 26 + d*10;
+      const baseGapMax = 48 + d*26;
+      const risePenalty = clamp(rise / 52, 0, 1);
+      const gap = rand(baseGapMin, baseGapMax - (16 * risePenalty));
+
+      const px = base + gap;
+      const pMain = { id: nextPlatId++, x: px, y, w, h: PLATFORM_H, kind };
+      platforms.push(pMain);
+      genLastY = y;
+
+      // sometimes add a micro platform after (very hard)
+      if(Math.random() < (0.15 + d*0.22)){
+        const y2 = clamp(y + rand(-26, 18), 34, FLOOR - 10);
+        const w2 = rand(26, 54);
+        const x2 = px + w + rand(16, 36 + d*18);
+        platforms.push({ id: nextPlatId++, x: x2, y: y2, w: w2, h: PLATFORM_H, kind: TYPE.THIN });
+      }
+
+      // occasional second layer: an upper platform above the main one
+      if(Math.random() < (0.12 + d*0.18)){
+        const uw = rand(34, 86 - d*10);
+        const uy = clamp(y - rand(34, 58), 22, y - 18);
+        const ux = px + rand(2, Math.max(3, w - uw - 2));
+        platforms.push({ id: nextPlatId++, x: ux, y: uy, w: uw, h: PLATFORM_H, kind: TYPE.THIN });
+        // sometimes put a spike on the upper layer for risk/reward
+        if(Math.random() < 0.25 + d*0.25){
+          const sw = rand(10, 14);
+          const sx = ux + rand(6, Math.max(7, uw - sw - 6));
+          spikes.push({ x: sx, y: uy - SPIKE_H, w: sw, h: SPIKE_H, kind: TYPE.SPIKES, pid: platforms[platforms.length - 1].id });
+        }
+      }
+
+      // place pads/spikes on main platform (not always)
+      const padRoll = Math.random();
+      if(padRoll < 0.07){
+        // Burst pad (rarer)
+        const bx = px + rand(8, w - 26);
+        pads.push({ x: bx, y: y - PAD_H, w: 18, h: PAD_H, kind: TYPE.BURST });
+      } else if(padRoll < 0.26){
+        // speed pad on platform
+        const sx = px + rand(8, w - 26);
+        pads.push({ x: sx, y: y - PAD_H, w: 18, h: PAD_H, kind: TYPE.SPEED });
+      } else if(padRoll < 0.44){
+        // jump pad on platform
+        const jx = px + rand(8, w - 26);
+        pads.push({ x: jx, y: y - PAD_H, w: 18, h: PAD_H, kind: TYPE.JUMP });
+      }
+
+      // spikes: harder as distance grows
+      const spikeRoll = Math.random();
+      if(spikeRoll < (0.25 + d*0.35)){
+        const count = randi(1, 1 + (d>0.5 ? 2 : 1));
+        for(let i=0;i<count;i++){
+          const sw = rand(10, 16);
+          const sx = px + rand(6, Math.max(7, w - sw - 6));
+          spikes.push({ x: sx, y: y - SPIKE_H, w: sw, h: SPIKE_H, kind: TYPE.SPIKES, pid: pMain.id });
+        }
+      }
+
+      // floor spike fields in late game
+      if(d > 0.45 && Math.random() < 0.14 + d*0.20){
+        const len = rand(32, 84);
+        const count = Math.floor(len / 14);
+        const fx = px + w + rand(10, 40);
+        for(let i=0;i<count;i++){
+          spikes.push({ x: fx + i*14, y: FLOOR - SPIKE_H, w: 12, h: SPIKE_H, kind: TYPE.SPIKES });
+        }
+      }
+
+      // side lightning orbs ("fireballs") that force jumps/dodges
+      // Spawns from left or right edge and travels across mid-screen.
+      if(d > 0.12 && Math.random() < (0.045 + d*0.09)){
+        const fromLeft = Math.random() < 0.5;
+        const yb = clamp(rand(36, FLOOR - 70) + rand(-d*18, d*18), 26, FLOOR - 26);
+        const spd = (2.0 + d*1.8) * (practice ? 0.9 : 1.0);
+        sideBolts.push({
+          x: fromLeft ? -10 : (W0 + 10),
+          y: yb,
+          r: randi(5, 7),
+          vx: fromLeft ? spd : -spd,
+          life: randi(180, 260),
+          phase: rand(0, Math.PI*2)
+        });
+      }
+    }
+
+    let p1 = new Player('P1', 92, PAL.volt);
+    let p2 = new Player('P2', 118, PAL.volt2);
+
+    function resetPlayers(){
+      p1 = new Player('P1', 92, PAL.volt);
+      p2 = new Player('P2', 118, PAL.volt2);
+      // spawn players on the first platform
+      const first = platforms[0];
+      const y = first ? (first.y - PLAYER_H) : (FLOOR - 60);
+      p1.y = y;
+      p2.y = y;
+      p1.onGround = true;
+      p2.onGround = true;
+    }
+
+    function toggleDebug1P(){
+      debug1P = !debug1P;
+      // Restart so state is clean and consistent.
+      if(mode === 'play' || mode === 'dying' || mode === 'over'){
+        startGame(practice);
+      } else {
+        hud.innerHTML = `V O L T S  |  Best: ${best}${debug1P ? '  |  DEBUG 1P' : ''}`;
+      }
+    }
+
+    function beginDying(reason){
+      if(mode !== 'play') return;
+      mode = 'dying';
+      deathTimer = 38; // ~0.6s at 60fps
+      pendingGameOverReason = reason;
+    }
+
+    function finalizeGameOver(){
+      if(mode !== 'dying') return;
+      mode = 'over';
+      best = Math.max(best, Math.floor(score));
+      localStorage.setItem('VOLTS_BEST', String(best));
+      overText.textContent = `${pendingGameOverReason}  Score: ${Math.floor(score)}  Best: ${best}`;
+      overScreen.style.display = 'flex';
+    }
+
+    function startGame(isPractice){
+      practice = isPractice;
+      mode = 'play';
+      startScreen.style.display = 'none';
+      overScreen.style.display = 'none';
+      resetWorld();
+      resetPlayers();
+      requestAnimationFrame(loop);
+    }
+
+    btnStart.addEventListener('click', () => startGame(false));
+    btnPractice.addEventListener('click', () => startGame(true));
+    btnRestart.addEventListener('click', () => startGame(practice));
+
+    function inputForPlayers(){
+      const p1JumpPressed = !!keys.get('KeyW') || touchJump1 > 0;
+      const p2JumpPressed = !debug1P && (!!keys.get('ArrowUp') || touchJump2 > 0);
+      const p1Drop = !!keys.get('KeyS');
+      const p2Drop = !debug1P && !!keys.get('ArrowDown');
+
+      return {
+        p1: {
+          jumpPressed: p1JumpPressed,
+          drop: p1Drop
+        },
+        p2: {
+          jumpPressed: p2JumpPressed,
+          drop: p2Drop
+        }
+      };
+    }
+
+    let lastJump1 = false;
+    let lastJump2 = false;
+
+    function update(){
+      t++;
+      distance += world.speed;
+
+      const dying = (mode === 'dying');
+      if(!dying) maybeLightning();
+      const scroll = dying ? 0 : world.speed;
+      if(scroll !== 0){
+        for(const p of platforms) p.x -= scroll;
+        for(const pad of pads) pad.x -= scroll;
+        for(const s of spikes) s.x -= scroll;
+        // side bolts don't scroll with the world; they are screen-space hazards
+      }
+
+      // fell out of the world (still lethal even if invulnerable)
+      if(p1.y > H0 + 80) { p1.invuln = 0; p1.kill('P1 fell.'); }
+      if(p2.y > H0 + 80) { p2.invuln = 0; p2.kill('P2 fell.'); }
+
+      // clean old
+      platforms = platforms.filter(p => p.x + p.w > -40);
+      pads = pads.filter(p => p.x + p.w > -40);
+      spikes = spikes.filter(s => s.x + s.w > -40);
+      sideBolts = sideBolts.filter(b => b.life > 0 && b.x > -40 && b.x < W0 + 40);
+
+      // keep platform-anchored spikes attached; remove spikes whose platform no longer exists
+      const platById = new Map();
+      for(const p of platforms) platById.set(p.id, p);
+      for(const s of spikes){
+        if(s.pid){
+          const p = platById.get(s.pid);
+          if(p) s.y = p.y - s.h;
+        }
+      }
+      spikes = spikes.filter(s => !s.pid || platById.has(s.pid));
+
+      // generate (don’t extend while dying)
+      if(!dying){
+        while(maxX() < W0 + 260) genChunk();
+      }
+
+      // accelerate (pause while dying)
+      if(!dying){
+        world.speed += world.accel * (practice ? 0.75 : 1.0);
+        world.speed = Math.min(world.speed, practice ? 4.2 : 5.2);
+      }
+
+      // input edge detection for jump
+      const inp = inputForPlayers();
+      if(touchJump1 > 0) touchJump1--;
+      if(touchJump2 > 0) touchJump2--;
+
+      const jump1 = inp.p1.jumpPressed && !lastJump1;
+      const jump2 = inp.p2.jumpPressed && !lastJump2;
+      lastJump1 = inp.p1.jumpPressed;
+      lastJump2 = inp.p2.jumpPressed;
+
+      p1.drop = inp.p1.drop;
+      p2.drop = inp.p2.drop;
+
+      if(jump1) p1.jump(JUMP);
+      if(jump2) p2.jump(JUMP);
+
+      if(!dying){
+        p1.update({ drop: inp.p1.drop, jumpPressed: jump1 });
+        if(!debug1P) p2.update({ drop: inp.p2.drop, jumpPressed: jump2 });
+      }
+
+      // update side bolts + collisions
+      for(const b of sideBolts){
+        b.life--;
+        b.phase += 0.22;
+        b.x += b.vx;
+        // slight bob for "electric" feel
+        b.y += Math.sin(b.phase) * 0.25;
+
+        if(!dying){
+          const bx = b.x - b.r;
+          const by = b.y - b.r;
+          const bw = b.r*2;
+          const bh = b.r*2;
+          if(p1.invuln <= 0 && aabb(p1.x, p1.y, p1.w, p1.h, bx, by, bw, bh)) p1.kill('P1 hit a lightning orb.');
+          if(p2.invuln <= 0 && aabb(p2.x, p2.y, p2.w, p2.h, bx, by, bw, bh)) p2.kill('P2 hit a lightning orb.');
+        }
+      }
+
+      // scoring (2x for 2 seconds after Burst Pad)
+      if(!dying){
+        const mult = (p1.scoreMult > 0 || (!debug1P && p2.scoreMult > 0)) ? 2 : 1;
+        score += world.speed * mult;
+      }
+
+      // particles
+      for(const prt of parts) prt.update();
+      parts = parts.filter(p => p.life > 0);
+
+      // screen fx decay
+      world.shake *= 0.85;
+      world.flash *= 0.86;
+
+      // HUD (score + two cooldown bars underneath)
+      const s = Math.floor(score);
+      const bar = (label, v, col) => {
+        const fill = Math.floor(v * 80);
+        const empty = 80 - fill;
+        return `<div style="margin-top:6px;line-height:1.2">
+          <span style="color:${col}">${label}</span>
+          <span style="display:inline-block;width:84px;border:1px solid rgba(255,232,0,0.25);padding:1px 1px;margin-left:6px">
+            <span style="display:inline-block;height:6px;width:${fill}px;background:${col};"></span>
+            <span style="display:inline-block;height:6px;width:${empty}px;background:rgba(255,232,0,0.10);"></span>
+          </span>
+        </div>`;
+      };
+      const barCharged = (label, col) => {
+        return `<div style="margin-top:6px;line-height:1.2">
+          <span style="color:${col}">${label}</span>
+          <span style="display:inline-block;width:84px;border:1px solid rgba(159,231,255,0.75);padding:1px 1px;margin-left:6px;box-shadow:0 0 10px rgba(159,231,255,0.55);animation:voltsPulse 0.55s infinite steps(2,end)">
+            <span style="display:inline-block;height:6px;width:80px;background:linear-gradient(90deg, rgba(159,231,255,0.15), rgba(159,231,255,0.95), rgba(255,255,255,0.55), rgba(159,231,255,0.95), rgba(159,231,255,0.15));animation:voltsFlicker 0.28s infinite steps(2,end)"></span>
+          </span>
+        </div>`;
+      };
+      hud.innerHTML =
+        `V O L T S  |  Score: ${s}  |  Best: ${best}  |  Speed: ${world.speed.toFixed(2)}  |  Mode: ${practice ? 'PRACTICE' : 'RUN'}${(p1.scoreMult>0||(!debug1P && p2.scoreMult>0))?'  |  2X':''}${debug1P?'  |  DEBUG 1P':''}` +
+        (p1.djUnlimited>0 ? barCharged('P1 DJ', '#9fe7ff') : bar('P1 DJ', p1.djCharge, '#ffe800')) +
+        (debug1P ? '' : (p2.djUnlimited>0 ? barCharged('P2 DJ', '#9fe7ff') : bar('P2 DJ', p2.djCharge, '#fff7a8')));
+
+      if(dying){
+        deathTimer = Math.max(0, deathTimer - 1);
+        if(deathTimer === 0){
+          finalizeGameOver();
+        }
+      }
+    }
+
+    function drawBackground(){
+      ctx.fillStyle = PAL.bg1;
+      ctx.fillRect(0,0,W0,H0);
+
+      // subtle star/scanline grid
+      ctx.globalAlpha = 0.08;
+      ctx.fillStyle = PAL.volt;
+      for(let x = ((-distance*0.2)|0)%24; x < W0; x += 24){
+        ctx.fillRect(x, 0, 1, H0);
+      }
+      for(let y = 0; y < H0; y += 18){
+        ctx.fillRect(0, y, W0, 1);
+      }
+      ctx.globalAlpha = 1;
+
+      // horizon glow
+      const g = ctx.createLinearGradient(0, 0, 0, H0);
+      g.addColorStop(0, 'rgba(255,232,0,0.10)');
+      g.addColorStop(0.55, 'rgba(255,232,0,0.04)');
+      g.addColorStop(1, 'rgba(0,0,0,0.0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0,0,W0,H0);
+
+      // occasional white lightning strike
+      if(lightning.active){
+        lightning.t++;
+        const a = 1 - (lightning.t / lightning.life);
+        // bolt path: segmented jagged line
+        ctx.globalAlpha = clamp(a, 0, 1);
+        ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+        ctx.shadowColor = '#ffffff';
+        ctx.shadowBlur = 18;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        let x = lightning.x;
+        let y = 8;
+        ctx.moveTo(x, y);
+        for(let i=0;i<7;i++){
+          x += randi(-18, 18);
+          y += randi(18, 32);
+          ctx.lineTo(clamp(x, 6, W0-6), clamp(y, 8, H0-6));
+        }
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // quick screen-white flash (blocky)
+        ctx.globalAlpha = clamp(a*0.25, 0, 0.25);
+        ctx.fillStyle = 'rgba(255,255,255,1)';
+        ctx.fillRect(0,0,W0,H0);
+        ctx.globalAlpha = 1;
+
+        if(lightning.t >= lightning.life){
+          lightning.active = false;
+        }
+      }
+    }
+
+    function drawPlatforms(){
+      for(const p of platforms){
+        const x = p.x|0, y = p.y|0;
+        if(p.kind === TYPE.THIN){
+          ctx.fillStyle = 'rgba(255,232,0,0.16)';
+          ctx.fillRect(x, y, p.w|0, p.h|0);
+          ctx.strokeStyle = 'rgba(255,232,0,0.85)';
+          ctx.lineWidth = 1;
+          for(let i=0;i<p.w;i+=6){
+            ctx.strokeRect(x+i, y+1, 3, p.h-2);
+          }
+        } else {
+          ctx.shadowColor = PAL.volt;
+          ctx.shadowBlur = 10;
+          ctx.fillStyle = 'rgba(0,0,0,0.85)';
+          ctx.fillRect(x, y, p.w|0, p.h|0);
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = PAL.volt;
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x+0.5, y+0.5, (p.w|0)-1, (p.h|0)-1);
+          // inner scan
+          ctx.globalAlpha = 0.15;
+          ctx.fillStyle = PAL.volt2;
+          ctx.fillRect(x+2, y+2, (p.w|0)-4, 1);
+          ctx.globalAlpha = 1;
+        }
+      }
+    }
+
+    function drawPads(){
+      for(const pad of pads){
+        const x = pad.x|0, y = pad.y|0;
+        const pulse = 0.55 + 0.45 * Math.sin((t * 0.18) + x * 0.02);
+        if(pad.kind === TYPE.SPEED){
+          // BOOST PAD: thicker, bright yellow, ">>" arrows
+          ctx.shadowColor = PAL.volt;
+          ctx.shadowBlur = 22;
+          ctx.fillStyle = `rgba(255,232,0,${0.18 + 0.10*pulse})`;
+          ctx.fillRect(x, y-1, pad.w|0, (pad.h|0)+2);
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = PAL.volt;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x+0.5, y-0.5, (pad.w|0)-1, (pad.h|0)+1);
+
+          ctx.fillStyle = PAL.volt;
+          // chevrons
+          ctx.fillRect(x+4, y, 3, pad.h|0);
+          ctx.fillRect(x+9, y, 3, pad.h|0);
+          ctx.fillRect(x+14, y, 3, pad.h|0);
+        } else {
+          if(pad.kind === TYPE.BURST){
+            // BURST PAD: red/black with electric baby-blue accent
+            ctx.shadowColor = '#ff2b2b';
+            ctx.shadowBlur = 20;
+            ctx.fillStyle = 'rgba(0,0,0,0.85)';
+            ctx.fillRect(x, y-1, pad.w|0, (pad.h|0)+2);
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = '#ff2b2b';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x+0.5, y-0.5, (pad.w|0)-1, (pad.h|0)+1);
+            // red hazard stripes
+            ctx.fillStyle = `rgba(255,43,43,${0.35 + 0.25*pulse})`;
+            for(let i=0;i<pad.w;i+=4){
+              ctx.fillRect(x+i, y, 2, pad.h|0);
+            }
+            // baby-blue lightning pixel
+            ctx.fillStyle = '#9fe7ff';
+            ctx.fillRect(x + (pad.w>>1), y-3, 2, 2);
+            continue;
+          }
+          // JUMP PAD: lighter (white-ish), "^^" columns + sparkle
+          ctx.shadowColor = PAL.volt2;
+          ctx.shadowBlur = 26;
+          ctx.fillStyle = `rgba(255,247,168,${0.16 + 0.12*pulse})`;
+          ctx.fillRect(x, y, pad.w|0, pad.h|0);
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = PAL.volt2;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x+0.5, y+0.5, (pad.w|0)-1, (pad.h|0)-1);
+
+          ctx.fillStyle = PAL.volt2;
+          ctx.fillRect(x+6, y, 2, pad.h|0);
+          ctx.fillRect(x+10, y, 2, pad.h|0);
+          // sparkle pixels
+          if(((t + (x|0)) % 6) === 0){
+            ctx.fillRect(x + ((pad.w>>1)|0), y-3, 2, 2);
+          }
+        }
+      }
+    }
+
+    // --- Lightning (background strikes) ---
+    let lightning = { active:false, t:0, x:0, life:0 };
+    function maybeLightning(){
+      if(lightning.active) return;
+      // chance scales slightly with speed; still rare
+      const chance = 0.002 + (world.speed * 0.00035);
+      if(Math.random() < chance){
+        lightning.active = true;
+        lightning.t = 0;
+        lightning.x = randi(40, W0-40);
+        lightning.life = randi(10, 16);
+      }
+    }
+
+    function drawSpikes(){
+      for(const s of spikes){
+        const x = s.x|0, y = s.y|0;
+        ctx.shadowColor = PAL.volt;
+        ctx.shadowBlur = 16;
+        ctx.fillStyle = 'rgba(255,232,0,0.22)';
+        // triangle spikes (pixel pyramid)
+        const w = s.w|0, h = s.h|0;
+        const steps = Math.max(3, Math.floor(w / 2));
+        for(let i=0;i<steps;i++){
+          const yy = y + h - 1 - Math.floor((i / steps) * h);
+          const half = Math.floor((i / steps) * (w/2));
+          const xx = x + ((w/2)|0) - half;
+          const ww = half*2 + 2;
+          ctx.fillRect(xx, yy, ww, 1);
+        }
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = PAL.volt;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x+0.5, y+h-0.5);
+        ctx.lineTo(x+(w/2), y+0.5);
+        ctx.lineTo(x+w-0.5, y+h-0.5);
+        ctx.closePath();
+        ctx.stroke();
+      }
+    }
+
+    function drawSideBolts(){
+      for(const b of sideBolts){
+        const x = b.x|0, y = b.y|0;
+        const r = b.r|0;
+        const pulse = 0.55 + 0.45*Math.sin(b.phase*1.35);
+        const tw = (pulse > 0.8) ? 1 : 0;
+
+        // STAR core (pixel cross + diagonals)
+        ctx.save();
+        ctx.shadowColor = '#9fe7ff';
+        ctx.shadowBlur = 14 + 14*pulse;
+        ctx.globalAlpha = 0.95;
+        ctx.fillStyle = '#ffffff';
+
+        // center
+        ctx.fillRect(x-1, y-1, 2, 2);
+        // arms
+        ctx.fillRect(x-(r+1), y-1, r, 2);
+        ctx.fillRect(x+2, y-1, r, 2);
+        ctx.fillRect(x-1, y-(r+1), 2, r);
+        ctx.fillRect(x-1, y+2, 2, r);
+        // diagonals (sparkle points)
+        if(tw){
+          ctx.fillRect(x-(r-1), y-(r-1), 2, 2);
+          ctx.fillRect(x+(r-1), y-(r-1), 2, 2);
+          ctx.fillRect(x-(r-1), y+(r-1), 2, 2);
+          ctx.fillRect(x+(r-1), y+(r-1), 2, 2);
+        }
+
+        // baby-blue glow fill behind
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 0.25 + 0.20*pulse;
+        ctx.fillStyle = '#9fe7ff';
+        ctx.fillRect(x-r, y-r, r*2, r*2);
+
+        // trailing star dust
+        ctx.globalAlpha = 0.45;
+        ctx.fillStyle = '#9fe7ff';
+        const tail = (b.vx > 0) ? -1 : 1;
+        for(let i=0;i<5;i++){
+          ctx.fillRect(x + tail*(r + 3 + i*4), y + ((i%2)*2-1), 2, 2);
+        }
+        ctx.restore();
+      }
+    }
+
+    function drawParticles(){
+      for(const p of parts){
+        const a = clamp(p.life / 26, 0, 1);
+        let col = PAL.volt;
+        if(p.kind === 'volt2') col = PAL.volt2;
+        if(p.kind === 'voltDim') col = 'rgba(255,232,0,0.55)';
+        if(p.kind === 'hazard') col = PAL.hazard;
+        if(p.kind === 'burst') col = '#9fe7ff';
+        ctx.globalAlpha = a * 0.9;
+        ctx.fillStyle = col;
+        const sz = (p.kind === 'burst') ? 3 : 2;
+        ctx.fillRect((p.x|0), (p.y|0), sz, sz);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function draw(){
+      let sx = 0, sy = 0;
+      if(world.shake > 0.05){
+        sx = (rand(-world.shake, world.shake))|0;
+        sy = (rand(-world.shake, world.shake))|0;
+      }
+      ctx.save();
+      ctx.translate(sx, sy);
+
+      drawBackground();
+      drawPlatforms();
+      drawPads();
+      drawSpikes();
+      drawSideBolts();
+      p1.draw();
+      if(!debug1P) p2.draw();
+      drawParticles();
+
+      // square edge vignette (no curves)
+      ctx.globalAlpha = 0.65;
+      const edge = 22;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(0, 0, W0, edge);
+      ctx.fillRect(0, H0-edge, W0, edge);
+      ctx.fillRect(0, 0, edge, H0);
+      ctx.fillRect(W0-edge, 0, edge, H0);
+      ctx.globalAlpha = 1;
+
+      // flash
+      if(world.flash > 0.01){
+        ctx.fillStyle = `rgba(${world.flashR},${world.flashG},${world.flashB},${world.flash})`;
+        ctx.fillRect(0,0,W0,H0);
+      }
+
+      ctx.restore();
+    }
+
+    let raf = 0;
+    function loop(){
+      if(mode !== 'play' && mode !== 'dying') return;
+      update();
+      draw();
+      raf = requestAnimationFrame(loop);
+    }
+
+    // Start in menu
+    function showMenu(){
+      mode = 'menu';
+      startScreen.style.display = 'flex';
+      overScreen.style.display = 'none';
+      hud.innerHTML = `V O L T S  |  Best: ${best}`;
+      cancelAnimationFrame(raf);
+    }
+    showMenu();
+  })();
+  </script>
+</body>
+</html>
