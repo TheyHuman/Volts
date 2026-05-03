@@ -264,8 +264,10 @@
     const TYPE = {
       THICK: 'thick',
       THIN: 'thin',
+      CRUMBLE: 'crumble',
       SPEED: 'speed',
       JUMP: 'jump',
+      SWAP: 'swap',
       BURST: 'burst',
       SPIKES: 'spikes'
     };
@@ -300,6 +302,60 @@
 
     function aabb(ax,ay,aw,ah, bx,by,bw,bh){
       return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+    }
+
+    function buildRandomLightningPath(){
+      const path = [];
+      let x = randi(40, W0-40), y = 8;
+      path.push([x, y]);
+      for(let i=0;i<7;i++){
+        x += randi(-18, 18);
+        y += randi(18, 32);
+        path.push([clamp(x, 6, W0-6), clamp(y, 8, H0-6)]);
+      }
+      return path;
+    }
+
+    function buildStrikePath(tx, ty){
+      const path = [];
+      let x = clamp(tx + randi(-10, 10), 12, W0-12);
+      path.push([x, 6]);
+      for(let i=0;i<8;i++){
+        const p = (i + 1) / 8;
+        x = clamp(tx + randi(-16, 16), 6, W0-6);
+        const yy = clamp(6 + (ty - 6) * p + randi(-6, 6), 6, H0-8);
+        path.push([x, yy]);
+      }
+      return path;
+    }
+
+    function triggerStrikeLightning(tx, ty){
+      lightning.active = true;
+      lightning.t = 0;
+      lightning.life = 22;
+      lightning.isStrike = true;
+      lightning.path = buildStrikePath(tx, ty);
+    }
+
+    function pushShockwave(x, y){
+      shockwaves.push({ x, y, r: 0, a: 0.92 });
+    }
+
+    function swapPlayerStates(){
+      if(debug1P || p1.dead || p2.dead) return;
+      const swapNum = (a, b, keys) => {
+        for(const k of keys){
+          const t = a[k];
+          a[k] = b[k];
+          b[k] = t;
+        }
+      };
+      swapNum(p1, p2, ['x','y','vx','vy','speedBuff','jumps','onGround','coyote','djCharge','invuln','scoreMult','djUnlimited','burstFx','padCD']);
+      const tr = p1.trail;
+      p1.trail = p2.trail;
+      p2.trail = tr;
+      p1.x = clamp(p1.x, 42, W0 - 42 - p1.w);
+      p2.x = clamp(p2.x, 42, W0 - 42 - p2.w);
     }
 
     class Particle {
@@ -415,6 +471,23 @@
         // X collisions (solid sides)
         for(const p of platforms){
           if(p.kind === TYPE.SPIKES) continue;
+          if(p.kind === TYPE.CRUMBLE){
+            for(let si=0; si<p.pieces.length; si++){
+              const pc = p.pieces[si];
+              if(pc.mode !== 'solid') continue;
+              const sx = crumbleSegX(p, si);
+              if(!aabb(this.x, this.y, this.w, this.h, sx, p.y, pc.w, p.h)) continue;
+              if(this.vx > 0){
+                this.x = sx - this.w;
+              } else if(this.vx < 0){
+                this.x = sx + pc.w;
+              } else {
+                if(prevX + this.w <= sx) this.x = sx - this.w;
+                else if(prevX >= sx + pc.w) this.x = sx + pc.w;
+              }
+            }
+            continue;
+          }
           if(aabb(this.x, this.y, this.w, this.h, p.x, p.y, p.w, p.h)){
             if(this.vx > 0){
               this.x = p.x - this.w;
@@ -451,6 +524,30 @@
         const wantsDropThrough = (this.drop || (input.drop && input.jumpPressed));
         for(const p of platforms){
           if(p.kind === TYPE.SPIKES) continue;
+          if(p.kind === TYPE.CRUMBLE){
+            for(let si=0; si<p.pieces.length; si++){
+              const pc = p.pieces[si];
+              if(pc.mode !== 'solid') continue;
+              const sx = crumbleSegX(p, si);
+              if(!aabb(this.x, this.y, this.w, this.h, sx, p.y, pc.w, p.h)) continue;
+
+              if(this.vy > 0){
+                const prevBottom = prevY + this.h;
+                if(prevBottom <= p.y + 1 && prevVy >= 0){
+                  this.y = p.y - this.h;
+                  this.vy = 0;
+                  if(!this.onGround) burst(this.x + this.w/2, this.y + this.h, 6, 1.0, 0.8, 'voltDim');
+                  this.onGround = true;
+                  this.jumps = 0;
+                  this.coyote = 7;
+                }
+              } else if(this.vy < 0){
+                this.y = p.y + p.h;
+                this.vy = 0.15;
+              }
+            }
+            continue;
+          }
           if(p.kind === TYPE.THIN && wantsDropThrough) continue;
 
           if(!aabb(this.x, this.y, this.w, this.h, p.x, p.y, p.w, p.h)) continue;
@@ -471,6 +568,8 @@
             }
           }
         }
+
+        if(this.onGround) applyCrumbleStress(this);
 
         // pads
         if(this.padCD === 0){
@@ -510,6 +609,27 @@
                     'burst'
                   ));
                 }
+              } else if(pad.kind === TYPE.SWAP){
+                if(pad.used) break;
+                pad.used = true;
+                const cx = pad.x + pad.w/2;
+                const cy = pad.y + pad.h/2;
+                triggerStrikeLightning(cx, cy);
+                pushShockwave(cx, cy);
+                shake(1.25);
+                flash(159, 231, 255, 0.5);
+                for(let i=0;i<40;i++){
+                  parts.push(new Particle(
+                    cx, cy,
+                    rand(-3.2,3.2), rand(-3.2,3.2),
+                    randi(20,36),
+                    'burst'
+                  ));
+                }
+                if(!debug1P && !p1.dead && !p2.dead) swapPlayerStates();
+                p1.padCD = 18;
+                p2.padCD = 18;
+                this.padCD = 18;
               }
               break;
             }
@@ -602,9 +722,11 @@
     let pads = [];
     let spikes = [];
     let sideBolts = [];
+    let shockwaves = [];
     let nextPlatId = 1;
     let genLastY = FLOOR - 42; // last "main path" platform y (for reachability)
     let structureCD = 0;
+    let lightning = { active:false, t:0, life:0, isStrike:false, path:[] };
 
     function resetWorld(){
       t = 0;
@@ -615,6 +737,7 @@
       pads = [];
       spikes = [];
       sideBolts = [];
+      shockwaves = [];
       nextPlatId = 1;
       genLastY = FLOOR - 42;
       structureCD = 0;
@@ -622,6 +745,9 @@
       world.accel = practice ? 0.00055 : 0.00085;
       world.shake = 0;
       world.flash = 0;
+      lightning.active = false;
+      lightning.t = 0;
+      lightning.path = [];
 
       // baseline starting run (ground is deadly, so start elevated)
       const startY = FLOOR - 42;
@@ -647,6 +773,51 @@
       const p = { id: nextPlatId++, x, y, w, h: PLATFORM_H, kind };
       platforms.push(p);
       return p;
+    }
+
+    function crumbleSegX(p, idx){
+      let xx = p.x;
+      for(let i=0;i<idx;i++) xx += p.pieces[i].w;
+      return xx;
+    }
+
+    function addCrumblePlatform(x, y, w){
+      const segW = 6;
+      const pieces = [];
+      let left = w;
+      while(left > 0){
+        const pw = Math.min(segW, left);
+        pieces.push({ w: pw, stress: 0, mode: 'solid', fallY: 0, fallVy: 0 });
+        left -= pw;
+      }
+      const plat = { id: nextPlatId++, x, y, w, h: PLATFORM_H, kind: TYPE.CRUMBLE, pieces };
+      platforms.push(plat);
+      return plat;
+    }
+
+    function applyCrumbleStress(pl){
+      if(pl.dead || !pl.onGround) return;
+      const footY = pl.y + pl.h;
+      for(const p of platforms){
+        if(p.kind !== TYPE.CRUMBLE) continue;
+        for(let i=0;i<p.pieces.length;i++){
+          const pc = p.pieces[i];
+          if(pc.mode !== 'solid') continue;
+          const sx = crumbleSegX(p, i);
+          const sy = p.y;
+          const overlapX = pl.x + pl.w > sx + 0.5 && pl.x < sx + pc.w - 0.5;
+          const onTop = footY >= sy - 1 && footY <= sy + 4 && pl.vy >= -0.2;
+          if(overlapX && onTop){
+            pc.stress += 1.35;
+            if(pc.stress >= 20){
+              pc.mode = 'falling';
+              pc.fallVy = rand(0.15, 0.55);
+              burst(sx + pc.w/2, sy, 10, 1.0, 0.95, 'voltDim');
+              shake(0.35);
+            }
+          }
+        }
+      }
     }
 
     function addSpikeOnPlatform(p, xOffset, w){
@@ -766,12 +937,16 @@
       platforms.push(pMain);
       genLastY = y;
 
+      // Track geometry in this chunk so crumbling platforms don't stack on / under others
+      const chunkPlats = [{ x: px, y, w, h: PLATFORM_H }];
+
       // sometimes add a micro platform after (very hard)
       if(Math.random() < (0.15 + d*0.22)){
         const y2 = clamp(y + rand(-26, 18), 34, FLOOR - 10);
         const w2 = rand(26, 54);
         const x2 = px + w + rand(16, 36 + d*18);
         platforms.push({ id: nextPlatId++, x: x2, y: y2, w: w2, h: PLATFORM_H, kind: TYPE.THIN });
+        chunkPlats.push({ x: x2, y: y2, w: w2, h: PLATFORM_H });
       }
 
       // occasional second layer: an upper platform above the main one
@@ -779,26 +954,66 @@
         const uw = rand(34, 86 - d*10);
         const uy = clamp(y - rand(34, 58), 22, y - 18);
         const ux = px + rand(2, Math.max(3, w - uw - 2));
-        platforms.push({ id: nextPlatId++, x: ux, y: uy, w: uw, h: PLATFORM_H, kind: TYPE.THIN });
+        const upper = { id: nextPlatId++, x: ux, y: uy, w: uw, h: PLATFORM_H, kind: TYPE.THIN };
+        platforms.push(upper);
+        chunkPlats.push({ x: ux, y: uy, w: uw, h: PLATFORM_H });
         // sometimes put a spike on the upper layer for risk/reward
         if(Math.random() < 0.25 + d*0.25){
           const sw = rand(10, 14);
           const sx = ux + rand(6, Math.max(7, uw - sw - 6));
-          spikes.push({ x: sx, y: uy - SPIKE_H, w: sw, h: SPIKE_H, kind: TYPE.SPIKES, pid: platforms[platforms.length - 1].id });
+          spikes.push({ x: sx, y: uy - SPIKE_H, w: sw, h: SPIKE_H, kind: TYPE.SPIKES, pid: upper.id });
+        }
+      }
+
+      // occasional crumbling platform: place beyond main (not under same deck), with clearance
+      if(Math.random() < (0.09 + d*0.07)){
+        const M = 12;
+        const aabbSep = (ax,ay,aw,ah, bx,by,bw,bh) => (
+          !(ax + aw + M <= bx || bx + bw + M <= ax || ay + ah + M <= by || by + bh + M <= ay)
+        );
+        const collidesChunk = (cx, cy, cw) => {
+          for(const q of chunkPlats){
+            if(aabbSep(cx, cy, cw, PLATFORM_H, q.x, q.y, q.w, q.h)) return true;
+          }
+          return false;
+        };
+        let placed = false;
+        for(let att=0; att<18 && !placed; att++){
+          const cw = rand(36, 78);
+          // mostly ahead of main row so x never sits on pMain
+          const cx = px + w + rand(18, 38 + d*22) + (att % 5) * 8;
+          let cy;
+          if(att < 7){
+            // same “lane” as main: only safe if far enough in x (handled) — still offset down a step so not flush
+            cy = clamp(y + rand(10, 26), 40, FLOOR - 16);
+          } else if(att < 14){
+            // upper alternate path (clear of main + upper layer vertically)
+            cy = clamp(y - rand(40, 72), 26, y - 28);
+          } else {
+            // lower drop route
+            cy = clamp(y + rand(22, 42), 44, FLOOR - 20);
+          }
+          if(!collidesChunk(cx, cy, cw)){
+            addCrumblePlatform(cx, cy, cw);
+            placed = true;
+          }
         }
       }
 
       // place pads/spikes on main platform (not always)
       const padRoll = Math.random();
-      if(padRoll < 0.07){
+      if(padRoll < 0.045){
+        const sxw = px + rand(8, w - 26);
+        pads.push({ x: sxw, y: y - PAD_H, w: 18, h: PAD_H, kind: TYPE.SWAP, used: false });
+      } else if(padRoll < 0.115){
         // Burst pad (rarer)
         const bx = px + rand(8, w - 26);
         pads.push({ x: bx, y: y - PAD_H, w: 18, h: PAD_H, kind: TYPE.BURST });
-      } else if(padRoll < 0.26){
+      } else if(padRoll < 0.30){
         // speed pad on platform
         const sx = px + rand(8, w - 26);
         pads.push({ x: sx, y: y - PAD_H, w: 18, h: PAD_H, kind: TYPE.SPEED });
-      } else if(padRoll < 0.44){
+      } else if(padRoll < 0.48){
         // jump pad on platform
         const jx = px + rand(8, w - 26);
         pads.push({ x: jx, y: y - PAD_H, w: 18, h: PAD_H, kind: TYPE.JUMP });
@@ -953,6 +1168,32 @@
       }
       spikes = spikes.filter(s => !s.pid || platById.has(s.pid));
 
+      for(const p of platforms){
+        if(p.kind !== TYPE.CRUMBLE) continue;
+        let solids = 0;
+        for(const pc of p.pieces){
+          if(pc.mode === 'solid'){
+            solids++;
+            pc.stress = Math.max(0, pc.stress - 0.22);
+          } else if(pc.mode === 'falling'){
+            pc.fallVy += GRAV * 0.92;
+            pc.fallY += pc.fallVy;
+          }
+        }
+        if(solids === 0) p._dead = true;
+      }
+      platforms = platforms.filter(p => !p._dead);
+      const platStill = new Map();
+      for(const p of platforms) platStill.set(p.id, p);
+      spikes = spikes.filter(s => !s.pid || platStill.has(s.pid));
+
+      for(let i = shockwaves.length - 1; i >= 0; i--){
+        const sw = shockwaves[i];
+        sw.r += 3.5 + world.speed * 0.22;
+        sw.a -= 0.034;
+        if(sw.a <= 0 || sw.r > 150) shockwaves.splice(i, 1);
+      }
+
       // generate (don’t extend while dying)
       if(!dying){
         while(maxX() < W0 + 260) genChunk();
@@ -1074,36 +1315,34 @@
       ctx.fillStyle = g;
       ctx.fillRect(0,0,W0,H0);
 
-      // occasional white lightning strike
+      // lightning strike (background random or pad-triggered strike)
       if(lightning.active){
         lightning.t++;
         const a = 1 - (lightning.t / lightning.life);
-        // bolt path: segmented jagged line
-        ctx.globalAlpha = clamp(a, 0, 1);
-        ctx.strokeStyle = 'rgba(255,255,255,0.95)';
-        ctx.shadowColor = '#ffffff';
-        ctx.shadowBlur = 18;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        let x = lightning.x;
-        let y = 8;
-        ctx.moveTo(x, y);
-        for(let i=0;i<7;i++){
-          x += randi(-18, 18);
-          y += randi(18, 32);
-          ctx.lineTo(clamp(x, 6, W0-6), clamp(y, 8, H0-6));
-        }
-        ctx.stroke();
-        ctx.shadowBlur = 0;
+        const pth = lightning.path;
+        if(pth && pth.length > 1){
+          ctx.globalAlpha = clamp(a, 0, 1);
+          ctx.strokeStyle = lightning.isStrike ? 'rgba(159,231,255,0.98)' : 'rgba(255,255,255,0.95)';
+          ctx.shadowColor = lightning.isStrike ? '#9fe7ff' : '#ffffff';
+          ctx.shadowBlur = lightning.isStrike ? 24 : 18;
+          ctx.lineWidth = lightning.isStrike ? 3 : 2;
+          ctx.beginPath();
+          ctx.moveTo(pth[0][0], pth[0][1]);
+          for(let i=1;i<pth.length;i++) ctx.lineTo(pth[i][0], pth[i][1]);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
 
-        // quick screen-white flash (blocky)
-        ctx.globalAlpha = clamp(a*0.25, 0, 0.25);
-        ctx.fillStyle = 'rgba(255,255,255,1)';
-        ctx.fillRect(0,0,W0,H0);
-        ctx.globalAlpha = 1;
+          const flashMax = lightning.isStrike ? 0.38 : 0.25;
+          ctx.globalAlpha = clamp(a * flashMax, 0, flashMax);
+          ctx.fillStyle = lightning.isStrike ? 'rgba(159,231,255,1)' : 'rgba(255,255,255,1)';
+          ctx.fillRect(0,0,W0,H0);
+          ctx.globalAlpha = 1;
+        }
 
         if(lightning.t >= lightning.life){
           lightning.active = false;
+          lightning.isStrike = false;
+          lightning.path = [];
         }
       }
     }
@@ -1111,6 +1350,42 @@
     function drawPlatforms(){
       for(const p of platforms){
         const x = p.x|0, y = p.y|0;
+        if(p.kind === TYPE.CRUMBLE){
+          for(let ci=0; ci<p.pieces.length; ci++){
+            const pc = p.pieces[ci];
+            const px = crumbleSegX(p, ci)|0;
+            const py = (p.y + pc.fallY)|0;
+            const pw = pc.w|0;
+            const ph = p.h|0;
+            ctx.shadowColor = PAL.volt;
+            ctx.shadowBlur = pc.mode === 'falling' ? 6 : 10;
+            ctx.fillStyle = 'rgba(0,0,0,0.88)';
+            ctx.fillRect(px, py, pw, ph);
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = PAL.volt;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(px + 0.5, py + 0.5, pw - 1, ph - 1);
+            // lined pattern (horizontal scanlines + stress tint)
+            ctx.globalAlpha = 0.2 + Math.min(0.45, pc.stress * 0.02);
+            ctx.fillStyle = pc.mode === 'falling' ? 'rgba(255,200,80,0.35)' : 'rgba(255,232,0,0.35)';
+            for(let ly = 0; ly < ph; ly += 2){
+              ctx.fillRect(px, py + ly, pw, 1);
+            }
+            ctx.globalAlpha = 0.55;
+            ctx.strokeStyle = 'rgba(255,232,0,0.5)';
+            ctx.beginPath();
+            ctx.moveTo(px, py + 0.5);
+            ctx.lineTo(px + pw, py + 0.5);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = 'rgba(255,232,0,0.35)';
+            ctx.beginPath();
+            ctx.moveTo(px + 0.5, py);
+            ctx.lineTo(px + 0.5, py + ph);
+            ctx.stroke();
+          }
+          continue;
+        }
         if(p.kind === TYPE.THIN){
           ctx.fillStyle = 'rgba(255,232,0,0.16)';
           ctx.fillRect(x, y, p.w|0, p.h|0);
@@ -1157,8 +1432,28 @@
           ctx.fillRect(x+4, y, 3, pad.h|0);
           ctx.fillRect(x+9, y, 3, pad.h|0);
           ctx.fillRect(x+14, y, 3, pad.h|0);
-        } else {
-          if(pad.kind === TYPE.BURST){
+        } else if(pad.kind === TYPE.SWAP){
+          // SWAP PAD: light baby blue — swap P1/P2 on touch
+          ctx.shadowColor = '#9fe7ff';
+          ctx.shadowBlur = 26;
+          ctx.fillStyle = `rgba(186,235,255,${0.28 + 0.14*pulse})`;
+          ctx.fillRect(x, y-1, pad.w|0, (pad.h|0)+2);
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x+0.5, y-0.5, (pad.w|0)-1, (pad.h|0)+1);
+          ctx.fillStyle = '#ffffff';
+          const mid = x + ((pad.w>>1)|0);
+          const yy = y + ((pad.h>>1)|0);
+          // tiny ⇄ arrows
+          ctx.fillRect(mid-7, yy-1, 2, 2);
+          ctx.fillRect(mid-5, yy-1, 2, 2);
+          ctx.fillRect(mid+3, yy-1, 2, 2);
+          ctx.fillRect(mid+5, yy-1, 2, 2);
+          ctx.fillStyle = '#9fe7ff';
+          ctx.fillRect(mid-1, yy-3, 2, 2);
+          ctx.fillRect(mid-1, yy+1, 2, 2);
+        } else if(pad.kind === TYPE.BURST){
             // BURST PAD: red/black with electric baby-blue accent
             ctx.shadowColor = '#ff2b2b';
             ctx.shadowBlur = 20;
@@ -1176,8 +1471,7 @@
             // baby-blue lightning pixel
             ctx.fillStyle = '#9fe7ff';
             ctx.fillRect(x + (pad.w>>1), y-3, 2, 2);
-            continue;
-          }
+        } else {
           // JUMP PAD: lighter (white-ish), "^^" columns + sparkle
           ctx.shadowColor = PAL.volt2;
           ctx.shadowBlur = 26;
@@ -1200,7 +1494,6 @@
     }
 
     // --- Lightning (background strikes) ---
-    let lightning = { active:false, t:0, x:0, life:0 };
     function maybeLightning(){
       if(lightning.active) return;
       // chance scales slightly with speed; still rare
@@ -1208,8 +1501,20 @@
       if(Math.random() < chance){
         lightning.active = true;
         lightning.t = 0;
-        lightning.x = randi(40, W0-40);
         lightning.life = randi(10, 16);
+        lightning.isStrike = false;
+        lightning.path = buildRandomLightningPath();
+      }
+    }
+
+    function drawShockwaves(){
+      for(const sw of shockwaves){
+        ctx.strokeStyle = `rgba(159,231,255,${sw.a * 0.75})`;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(sw.x - sw.r, sw.y - sw.r, sw.r * 2, sw.r * 2);
+        ctx.strokeStyle = `rgba(255,255,255,${sw.a * 0.35})`;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(sw.x - sw.r * 0.65, sw.y - sw.r * 0.65, sw.r * 1.3, sw.r * 1.3);
       }
     }
 
@@ -1317,6 +1622,7 @@
       drawPads();
       drawSpikes();
       drawSideBolts();
+      drawShockwaves();
       p1.draw();
       if(!debug1P) p2.draw();
       drawParticles();
